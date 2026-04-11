@@ -16,6 +16,8 @@ add_library(winlator SHARED
             winlator/alsa_client.c
             winlator/patchelf_wrapper.cpp)
 
+add_subdirectory(native_pipeline)
+
 target_link_libraries(winlator
                       log
                       android
@@ -23,4 +25,5 @@ target_link_libraries(winlator
                       aaudio
                       EGL
                       GLESv2
-                      GLESv3)
+                      GLESv3
+                      native_pipeline)
