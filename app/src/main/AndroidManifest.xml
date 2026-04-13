@@ -68,11 +68,6 @@
 
         </activity>
 
-        <activity
-            android:name=".QuickSrTestActivity"
-            android:exported="true"
-            android:theme="@style/Theme.Pluvia" />
-
         <!-- GOG OAuth (in-app WebView; intercepts redirect for automatic code capture) -->
         <activity
             android:name=".ui.screen.auth.GOGOAuthActivity"
