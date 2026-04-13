@@ -4,7 +4,9 @@ import android.content.res.Configuration
 import android.os.Environment
 import android.os.storage.StorageManager
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,9 +22,11 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Login
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,6 +39,7 @@ import androidx.compose.ui.res.stringResource
 import app.gamenative.R
 import app.gamenative.PrefManager
 import app.gamenative.enums.AppTheme
+import app.gamenative.ui.enums.AppAccentColor
 import app.gamenative.ui.component.dialog.SingleChoiceDialog
 import app.gamenative.ui.theme.settingsTileColorsAlt
 import com.alorma.compose.settings.ui.SettingsGroup
@@ -57,6 +62,7 @@ import com.alorma.compose.settings.ui.SettingsMenuLink
 import androidx.compose.material3.Slider
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import kotlin.math.roundToInt
 import com.winlator.core.AppUtils
@@ -93,8 +99,12 @@ import app.gamenative.ui.util.SnackbarManager
 fun SettingsGroupInterface(
     appTheme: AppTheme,
     paletteStyle: PaletteStyle,
+    accentColor: AppAccentColor,
+    customAccentColorArgb: Long,
     onAppTheme: (AppTheme) -> Unit,
     onPaletteStyle: (PaletteStyle) -> Unit,
+    onAccentColor: (AppAccentColor) -> Unit,
+    onCustomAccentColorArgb: (Long) -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -102,6 +112,7 @@ fun SettingsGroupInterface(
 
     var openAppThemeDialog by rememberSaveable { mutableStateOf(false) }
     var openAppPaletteDialog by rememberSaveable { mutableStateOf(false) }
+    var customAccentDraftArgb by rememberSaveable { mutableStateOf(customAccentColorArgb) }
 
     var openStartScreenDialog by rememberSaveable { mutableStateOf(false) }
     var startScreenOption by rememberSaveable(openStartScreenDialog) { mutableStateOf(PrefManager.startScreen) }
@@ -273,6 +284,77 @@ fun SettingsGroupInterface(
                 PrefManager.warnBeforeExit = it
             },
         )
+
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text(
+                text = stringResource(R.string.settings_interface_accent_color_title),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(R.string.settings_interface_accent_color_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Spacer(modifier = Modifier.size(12.dp))
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val sideBySide = maxWidth >= 560.dp
+                if (sideBySide) {
+                    val gap = 16.dp
+                    val leftWidth = (maxWidth - gap) * 0.42f
+                    val rightWidth = (maxWidth - gap) - leftWidth
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(gap),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        AccentSwatchGrid(
+                            modifier = Modifier.width(leftWidth),
+                            accentColor = accentColor,
+                            customAccentColorArgb = customAccentColorArgb,
+                            onAccentColor = onAccentColor,
+                            onCustomSelected = {
+                                customAccentDraftArgb = customAccentColorArgb
+                                onAccentColor(AppAccentColor.CUSTOM)
+                            },
+                        )
+                        CustomAccentEditor(
+                            modifier = Modifier.width(rightWidth),
+                            accentColor = accentColor,
+                            customAccentDraftArgb = customAccentDraftArgb,
+                            onCustomAccentColorArgb = {
+                                customAccentDraftArgb = it
+                                onCustomAccentColorArgb(it)
+                                onAccentColor(AppAccentColor.CUSTOM)
+                            },
+                        )
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        AccentSwatchGrid(
+                            modifier = Modifier.fillMaxWidth(),
+                            accentColor = accentColor,
+                            customAccentColorArgb = customAccentColorArgb,
+                            onAccentColor = onAccentColor,
+                            onCustomSelected = {
+                                customAccentDraftArgb = customAccentColorArgb
+                                onAccentColor(AppAccentColor.CUSTOM)
+                            },
+                        )
+                        CustomAccentEditor(
+                            modifier = Modifier.fillMaxWidth(),
+                            accentColor = accentColor,
+                            customAccentDraftArgb = customAccentDraftArgb,
+                            onCustomAccentColorArgb = {
+                                customAccentDraftArgb = it
+                                onCustomAccentColorArgb(it)
+                                onAccentColor(AppAccentColor.CUSTOM)
+                            },
+                        )
+                    }
+                }
+            }
+        }
 
         // Language selection
         SettingsMenuLink(
@@ -648,6 +730,198 @@ private fun IconVariantCard(
     }
 }
 
+@Composable
+private fun AccentSwatchGrid(
+    modifier: Modifier = Modifier,
+    accentColor: AppAccentColor,
+    customAccentColorArgb: Long,
+    onAccentColor: (AppAccentColor) -> Unit,
+    onCustomSelected: () -> Unit,
+) {
+    Column(modifier = modifier) {
+        AppAccentColor.entries.chunked(4).forEach { rowOptions ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                rowOptions.forEach { option ->
+                    val optionColor = Color(option.resolvedArgb(customAccentColorArgb).toInt())
+                    val selected = option == accentColor
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(optionColor, RoundedCornerShape(8.dp))
+                            .border(
+                                width = if (selected) 3.dp else 1.dp,
+                                color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline,
+                                shape = RoundedCornerShape(8.dp),
+                            )
+                            .clickable {
+                                if (option == AppAccentColor.CUSTOM) {
+                                    onCustomSelected()
+                                } else {
+                                    onAccentColor(option)
+                                }
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (selected) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.background,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }
+            }
+            if (rowOptions != AppAccentColor.entries.chunked(4).last()) {
+                Spacer(modifier = Modifier.size(10.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CustomAccentEditor(
+    modifier: Modifier = Modifier,
+    accentColor: AppAccentColor,
+    customAccentDraftArgb: Long,
+    onCustomAccentColorArgb: (Long) -> Unit,
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = stringResource(R.string.settings_interface_custom_accent_title),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(modifier = Modifier.size(10.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(72.dp)
+                .background(Color(customAccentDraftArgb.toInt()), RoundedCornerShape(14.dp))
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline,
+                    shape = RoundedCornerShape(14.dp),
+                ),
+        )
+        Spacer(modifier = Modifier.size(12.dp))
+        Text(
+            text = if (accentColor == AppAccentColor.CUSTOM) {
+                stringResource(R.string.settings_interface_custom_accent_active)
+            } else {
+                stringResource(R.string.settings_interface_custom_accent_preview)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.size(8.dp))
+        ColorChannelSlider(
+            label = stringResource(R.string.settings_interface_custom_accent_red),
+            value = colorChannel(customAccentDraftArgb, 16),
+            trackColor = Color(0xFFEF4444),
+            onValueChange = { value ->
+                onCustomAccentColorArgb(
+                    rgbToArgb(
+                        red = value,
+                        green = colorChannel(customAccentDraftArgb, 8),
+                        blue = colorChannel(customAccentDraftArgb, 0),
+                    ),
+                )
+            },
+        )
+        ColorChannelSlider(
+            label = stringResource(R.string.settings_interface_custom_accent_green),
+            value = colorChannel(customAccentDraftArgb, 8),
+            trackColor = Color(0xFF10B981),
+            onValueChange = { value ->
+                onCustomAccentColorArgb(
+                    rgbToArgb(
+                        red = colorChannel(customAccentDraftArgb, 16),
+                        green = value,
+                        blue = colorChannel(customAccentDraftArgb, 0),
+                    ),
+                )
+            },
+        )
+        ColorChannelSlider(
+            label = stringResource(R.string.settings_interface_custom_accent_blue),
+            value = colorChannel(customAccentDraftArgb, 0),
+            trackColor = Color(0xFF3B82F6),
+            onValueChange = { value ->
+                onCustomAccentColorArgb(
+                    rgbToArgb(
+                        red = colorChannel(customAccentDraftArgb, 16),
+                        green = colorChannel(customAccentDraftArgb, 8),
+                        blue = value,
+                    ),
+                )
+            },
+        )
+        Spacer(modifier = Modifier.size(8.dp))
+        Text(
+            text = formatAccentHex(customAccentDraftArgb),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun ColorChannelSlider(
+    label: String,
+    value: Int,
+    trackColor: Color,
+    onValueChange: (Int) -> Unit,
+) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = value.toString(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Slider(
+            value = value.toFloat(),
+            onValueChange = { onValueChange(it.roundToInt().coerceIn(0, 255)) },
+            valueRange = 0f..255f,
+            steps = 254,
+            colors = androidx.compose.material3.SliderDefaults.colors(
+                thumbColor = trackColor,
+                activeTrackColor = trackColor,
+            ),
+        )
+    }
+}
+
+private fun formatAccentHex(argb: Long): String {
+    return "#%06X".format(argb and 0xFFFFFFL)
+}
+
+private fun colorChannel(argb: Long, shift: Int): Int {
+    return ((argb shr shift) and 0xFFL).toInt()
+}
+
+private fun rgbToArgb(red: Int, green: Int, blue: Int): Long {
+    return 0xFF000000L or
+        ((red.coerceIn(0, 255).toLong()) shl 16) or
+        ((green.coerceIn(0, 255).toLong()) shl 8) or
+        blue.coerceIn(0, 255).toLong()
+}
+
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES or Configuration.UI_MODE_TYPE_NORMAL)
 @Composable
 private fun Preview_SettingsScreen() {
@@ -660,8 +934,12 @@ private fun Preview_SettingsScreen() {
         SettingsGroupInterface(
             appTheme = AppTheme.DAY,
             paletteStyle = PaletteStyle.TonalSpot,
+            accentColor = AppAccentColor.MAGENTA,
+            customAccentColorArgb = AppAccentColor.MAGENTA.argb,
             onAppTheme = { },
             onPaletteStyle = { },
+            onAccentColor = { },
+            onCustomAccentColorArgb = { },
         )
     }
 }

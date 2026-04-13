@@ -14,6 +14,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import app.gamenative.enums.AppTheme
+import app.gamenative.ui.enums.AppAccentColor
 import app.gamenative.ui.enums.AppFilter
 import app.gamenative.ui.enums.HomeDestination
 import app.gamenative.ui.enums.Orientation
@@ -894,6 +895,20 @@ object PrefManager {
         }
         set(value) {
             setPref(APP_THEME_PALETTE, value.ordinal)
+        }
+
+    private val APP_ACCENT_COLOR = stringPreferencesKey("app_accent_color")
+    var appAccentColor: AppAccentColor
+        get() = AppAccentColor.fromKey(getPref(APP_ACCENT_COLOR, AppAccentColor.MAGENTA.key))
+        set(value) {
+            setPref(APP_ACCENT_COLOR, value.key)
+        }
+
+    private val APP_CUSTOM_ACCENT_COLOR = longPreferencesKey("app_custom_accent_color")
+    var appCustomAccentColorArgb: Long
+        get() = getPref(APP_CUSTOM_ACCENT_COLOR, AppAccentColor.MAGENTA.argb)
+        set(value) {
+            setPref(APP_CUSTOM_ACCENT_COLOR, value)
         }
 
     private val START_SCREEN = intPreferencesKey("start screen")

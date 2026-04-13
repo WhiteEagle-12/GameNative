@@ -45,7 +45,7 @@ import app.gamenative.ui.screen.library.components.ambient.AmbientModeConstants.
 import app.gamenative.ui.screen.library.components.ambient.AmbientModeConstants.BAR_TRACK_ALPHA
 import app.gamenative.ui.screen.library.components.ambient.AmbientModeConstants.SHIMMER_PERIOD_MS
 import app.gamenative.ui.screen.library.components.ambient.AmbientModeConstants.SHIMMER_WIDTH_FRACTION
-import app.gamenative.ui.theme.BrandGradient
+import app.gamenative.ui.theme.PluviaTheme
 import app.gamenative.utils.ShakeDetector
 import kotlinx.coroutines.delay
 
@@ -153,6 +153,7 @@ internal fun AmbientDownloadOverlay(
         )
 
         val barHeightPx = with(LocalDensity.current) { BAR_HEIGHT_DP.dp.toPx() }
+        val brandGradient = PluviaTheme.colors.brandGradient
 
         Box(
             modifier = Modifier
@@ -252,7 +253,7 @@ internal fun AmbientDownloadOverlay(
                     if (shimmerEndX > barX && shimmerStartX < barX + filledWidth) {
                         val shimmerColor = gradientColorAtPosition(
                             fraction = (shimmerCenter / barWidth).coerceIn(0f, 1f),
-                            gradient = BrandGradient,
+                            gradient = brandGradient,
                         )
 
                         drawRect(

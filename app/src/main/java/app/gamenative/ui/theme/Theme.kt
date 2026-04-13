@@ -2,7 +2,7 @@ package app.gamenative.ui.theme
 
 import android.app.Activity
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.darkColorScheme as materialDarkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
@@ -40,6 +40,7 @@ data class PluviaColors(
     val accentCyan: Color,
     val accentPurple: Color,
     val accentPink: Color,
+    val brandGradient: List<Color>,
     val accentSuccess: Color,
     val accentWarning: Color,
     val accentDanger: Color,
@@ -66,7 +67,7 @@ data class PluviaColors(
 /**
  * Dark theme color palette.
  */
-private val DarkPluviaColors = PluviaColors(
+private fun darkPluviaColors(accentColor: Color) = PluviaColors(
     statusInstalled = StatusInstalled,
     statusDownloading = StatusDownloading,
     statusAvailable = StatusAvailable,
@@ -81,8 +82,9 @@ private val DarkPluviaColors = PluviaColors(
     friendBlocked = FriendBlocked,
 
     accentCyan = PluviaCyan,
-    accentPurple = PluviaPurple,
-    accentPink = PluviaPink,
+    accentPurple = accentColor,
+    accentPink = accentColor,
+    brandGradient = listOf(PluviaCyan, accentColor, accentColor),
     accentSuccess = PluviaSuccess,
     accentWarning = PluviaWarning,
     accentDanger = PluviaDanger,
@@ -103,20 +105,18 @@ private val DarkPluviaColors = PluviaColors(
     compatibilityBadBackground = CompatibilityBadBg,
 )
 
-val BrandGradient = listOf(PluviaCyan, PluviaPurple, PluviaPink)
-
 // Light theme placeholder - customize when adding light theme support
 // private val LightPluviaColors = PluviaColors(...)
 
-private val LocalPluviaColors = staticCompositionLocalOf { DarkPluviaColors }
+private val LocalPluviaColors = staticCompositionLocalOf { darkPluviaColors(PluviaPrimary) }
 
 /**
  * Material3 dark color scheme using Pluvia colors.
  */
-private val DarkColorScheme = darkColorScheme(
-    primary = PluviaPrimary,
+private fun darkColorSchemeForAccent(accentColor: Color) = materialDarkColorScheme(
+    primary = accentColor,
     onPrimary = PluviaForeground,
-    primaryContainer = PluviaPrimary.copy(alpha = 0.2f),
+    primaryContainer = accentColor.copy(alpha = 0.2f),
     onPrimaryContainer = PluviaForeground,
 
     secondary = PluviaSecondary,
@@ -136,11 +136,11 @@ private val DarkColorScheme = darkColorScheme(
     onSurface = PluviaForeground,
     surfaceVariant = PluviaSecondary,
     onSurfaceVariant = PluviaForegroundMuted,
-    surfaceTint = PluviaPrimary,
+    surfaceTint = accentColor,
 
     inverseSurface = PluviaForeground,
     inverseOnSurface = PluviaBackground,
-    inversePrimary = PluviaPrimary,
+    inversePrimary = accentColor,
 
     error = PluviaDestructive,
     onError = PluviaForeground,
@@ -163,13 +163,18 @@ private val DarkColorScheme = darkColorScheme(
 @Composable
 fun PluviaTheme(
     seedColor: Color = PluviaSeed,
+    accentColor: Color = PluviaPrimary,
     isDark: Boolean = true, // for now, always force dark theme
     isAmoled: Boolean = false,
     style: PaletteStyle = PaletteStyle.TonalSpot,
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = DarkColorScheme
-    val pluviaColors = if (isDark) DarkPluviaColors else DarkPluviaColors // We can use LightPluviaColors when ready
+    val colorScheme = darkColorSchemeForAccent(accentColor)
+    val pluviaColors = if (isDark) {
+        darkPluviaColors(accentColor)
+    } else {
+        darkPluviaColors(accentColor)
+    } // We can use LightPluviaColors when ready
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -245,7 +250,7 @@ object DarkColors {
 fun settingsTileColors(): SettingsTileColors = SettingsTileDefaults.colors(
     titleColor = PluviaForeground,
     subtitleColor = PluviaForegroundMuted,
-    actionColor = PluviaCyan,
+    actionColor = MaterialTheme.colorScheme.primary,
 )
 
 @Composable

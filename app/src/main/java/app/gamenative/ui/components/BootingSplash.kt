@@ -33,7 +33,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.gamenative.ui.theme.PluviaTheme
-import app.gamenative.ui.theme.BrandGradient
 import kotlin.math.sin
 import kotlin.random.Random
 import kotlinx.coroutines.delay
@@ -44,6 +43,8 @@ fun BootingSplash(
     text: String = "Initializing...",
     progress: Float = -1f, // -1 for indeterminate, 0-1 for determinate
 ) {
+    val brandGradient = PluviaTheme.colors.brandGradient
+
     // Tips rotation (no animation cost, safe outside visibility check)
     val tips = remember {
         listOf(
@@ -186,7 +187,7 @@ fun BootingSplash(
                                 blurRadius = 20f,
                             ),
                             brush = Brush.horizontalGradient(
-                                colors = BrandGradient,
+                                colors = brandGradient,
                             ),
                         ),
                     )
@@ -271,7 +272,7 @@ private fun ProgressBar(
                 .clip(RoundedCornerShape(2.dp))
                 .background(
                     Brush.horizontalGradient(
-                        colors = BrandGradient,
+                        colors = PluviaTheme.colors.brandGradient,
                     ),
                 ),
         )

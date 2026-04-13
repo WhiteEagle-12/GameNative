@@ -1,6 +1,7 @@
 package app.gamenative.ui.data
 
 import app.gamenative.enums.AppTheme
+import app.gamenative.ui.enums.AppAccentColor
 import app.gamenative.ui.enums.ConnectionState
 import app.gamenative.ui.screen.PluviaScreen
 import com.materialkolor.PaletteStyle
@@ -8,6 +9,8 @@ import com.materialkolor.PaletteStyle
 data class MainState(
     val appTheme: AppTheme = AppTheme.NIGHT,
     val paletteStyle: PaletteStyle = PaletteStyle.TonalSpot,
+    val accentColor: AppAccentColor = AppAccentColor.MAGENTA,
+    val customAccentColorArgb: Long = AppAccentColor.MAGENTA.argb,
     val resettedScreen: PluviaScreen? = null,
     val currentScreen: PluviaScreen? = PluviaScreen.LoginUser,
     val hasLaunched: Boolean = false,

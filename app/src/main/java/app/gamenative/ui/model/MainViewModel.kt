@@ -21,6 +21,7 @@ import app.gamenative.service.SteamService
 import app.gamenative.service.epic.EpicCloudSavesManager
 import app.gamenative.ui.data.MainState
 import app.gamenative.ui.enums.ConnectionState
+import app.gamenative.ui.enums.AppAccentColor
 import app.gamenative.ui.screen.PluviaScreen
 import app.gamenative.utils.ContainerUtils
 import app.gamenative.utils.IntentLaunchManager
@@ -266,6 +267,18 @@ class MainViewModel @Inject constructor(
                 _state.update { it.copy(paletteStyle = value) }
             }
         }
+
+        viewModelScope.launch {
+            appTheme.accentColorFlow.collect { value ->
+                _state.update { it.copy(accentColor = value) }
+            }
+        }
+
+        viewModelScope.launch {
+            appTheme.customAccentColorFlow.collect { value ->
+                _state.update { it.copy(customAccentColorArgb = value) }
+            }
+        }
     }
 
     override fun onCleared() {
@@ -288,6 +301,14 @@ class MainViewModel @Inject constructor(
 
     fun setPalette(value: PaletteStyle) {
         appTheme.currentPalette = value
+    }
+
+    fun setAccentColor(value: AppAccentColor) {
+        appTheme.currentAccentColor = value
+    }
+
+    fun setCustomAccentColorArgb(value: Long) {
+        appTheme.currentCustomAccentColorArgb = value
     }
 
     fun setAnnoyingDialogShown(value: Boolean) {

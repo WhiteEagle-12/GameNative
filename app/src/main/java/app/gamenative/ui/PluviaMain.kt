@@ -29,6 +29,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
@@ -1105,6 +1106,7 @@ fun PluviaMain(
         },
         isAmoled = (state.appTheme == AppTheme.AMOLED),
         style = state.paletteStyle,
+        accentColor = Color(state.accentColor.resolvedArgb(state.customAccentColorArgb).toInt()),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             LoadingDialog(
@@ -1469,8 +1471,12 @@ fun PluviaMain(
                     SettingsScreen(
                         appTheme = state.appTheme,
                         paletteStyle = state.paletteStyle,
+                        accentColor = state.accentColor,
+                        customAccentColorArgb = state.customAccentColorArgb,
                         onAppTheme = viewModel::setTheme,
                         onPaletteStyle = viewModel::setPalette,
+                        onAccentColor = viewModel::setAccentColor,
+                        onCustomAccentColorArgb = viewModel::setCustomAccentColorArgb,
                         onBack = { navController.navigateUp() },
                     )
                 }

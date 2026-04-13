@@ -33,8 +33,7 @@ public class FSREASUEffect extends Effect {
         "uniform vec2 inputResolution;\n" +
         "\n" +
         "vec3 FsrEasuCF(vec2 p) {\n" +
-        "    vec3 c = texture2D(screenTexture, p).rgb;\n" +
-        "    return pow(c, vec3(2.2));\n" +
+        "    return texture2D(screenTexture, p).rgb;\n" +
         "}\n" +
         "\n" +
         "void FsrEasuSetF(inout vec2 dir, inout float len, float w, float lA, float lB, float lC, float lD, float lE) {\n" +
@@ -138,9 +137,8 @@ public class FSREASUEffect extends Effect {
         "    FsrEasuTapF(aC, aW, vec2(1.0, 2.0) - pp, dir, len2, lob, clp, oC);\n" +
         "    FsrEasuTapF(aC, aW, vec2(0.0, 2.0) - pp, dir, len2, lob, clp, nC);\n" +
         "\n" +
-        "    if(aW < 1e-6) aW = 1.0;\n" +
         "    vec3 pix = min(max4, max(min4, aC / aW));\n" +
         "\n" +
-        "    gl_FragColor = vec4(pow(pix, vec3(1.0/2.2)), 1.0);\n" +
+        "    gl_FragColor = vec4(pix, 1.0);\n" +
         "}\n";
 }

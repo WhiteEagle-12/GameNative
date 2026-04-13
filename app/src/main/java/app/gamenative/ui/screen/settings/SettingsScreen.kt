@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import app.gamenative.PrefManager
 import app.gamenative.R
 import app.gamenative.enums.AppTheme
+import app.gamenative.ui.enums.AppAccentColor
 import app.gamenative.ui.theme.PluviaTheme
 import com.materialkolor.PaletteStyle
 
@@ -64,15 +65,23 @@ import com.materialkolor.PaletteStyle
 fun SettingsScreen(
     appTheme: AppTheme,
     paletteStyle: PaletteStyle,
+    accentColor: AppAccentColor,
+    customAccentColorArgb: Long,
     onAppTheme: (AppTheme) -> Unit,
     onPaletteStyle: (PaletteStyle) -> Unit,
+    onAccentColor: (AppAccentColor) -> Unit,
+    onCustomAccentColorArgb: (Long) -> Unit,
     onBack: () -> Unit,
 ) {
     SettingsScreenContent(
         appTheme = appTheme,
         paletteStyle = paletteStyle,
+        accentColor = accentColor,
+        customAccentColorArgb = customAccentColorArgb,
         onAppTheme = onAppTheme,
         onPaletteStyle = onPaletteStyle,
+        onAccentColor = onAccentColor,
+        onCustomAccentColorArgb = onCustomAccentColorArgb,
         onBack = onBack,
     )
 }
@@ -81,8 +90,12 @@ fun SettingsScreen(
 private fun SettingsScreenContent(
     appTheme: AppTheme,
     paletteStyle: PaletteStyle,
+    accentColor: AppAccentColor,
+    customAccentColorArgb: Long,
     onAppTheme: (AppTheme) -> Unit,
     onPaletteStyle: (PaletteStyle) -> Unit,
+    onAccentColor: (AppAccentColor) -> Unit,
+    onCustomAccentColorArgb: (Long) -> Unit,
     onBack: () -> Unit,
 ) {
     val scrollState = rememberScrollState()
@@ -139,8 +152,12 @@ private fun SettingsScreenContent(
                     SettingsGroupInterface(
                         appTheme = appTheme,
                         paletteStyle = paletteStyle,
+                        accentColor = accentColor,
+                        customAccentColorArgb = customAccentColorArgb,
                         onAppTheme = onAppTheme,
                         onPaletteStyle = onPaletteStyle,
+                        onAccentColor = onAccentColor,
+                        onCustomAccentColorArgb = onCustomAccentColorArgb,
                     )
                 }
 
@@ -363,8 +380,12 @@ private fun Preview_SettingsScreen() {
         SettingsScreenContent(
             appTheme = AppTheme.DAY,
             paletteStyle = PaletteStyle.TonalSpot,
+            accentColor = AppAccentColor.MAGENTA,
+            customAccentColorArgb = AppAccentColor.MAGENTA.argb,
             onAppTheme = { },
             onPaletteStyle = { },
+            onAccentColor = { },
+            onCustomAccentColorArgb = { },
             onBack = { },
         )
     }
