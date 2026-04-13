@@ -7,6 +7,13 @@
 build/
 tools/*aab*
 
+# Local neural upscaling research artifacts
+.venv-qai/
+.qaihm/
+research_assets/
+quicksr_test.png
+quicksrnetsmall-tflite-float/
+
 # Build
 app/release/baselineProfiles/
 app/release/output-metadata.json
