@@ -2,9 +2,11 @@ package app.gamenative.neuralbench;
 
 import android.app.Activity;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.RectF;
 import android.os.Bundle;
-import android.os.SystemClock;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.ViewGroup;
@@ -18,6 +20,7 @@ import org.tensorflow.lite.DataType;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.Tensor;
 import org.tensorflow.lite.gpu.GpuDelegate;
+import org.tensorflow.lite.nnapi.NnApiDelegate;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -36,10 +39,12 @@ public class NeuralBenchActivity extends Activity {
     private ExecutorService executor;
     private Interpreter interpreter;
     private GpuDelegate gpuDelegate;
+    private NnApiDelegate nnApiDelegate;
     private String delegateLabel = "Not initialized";
 
     private TextView statusView;
     private Button runButton;
+    private ImageView inputView;
     private ImageView previewView;
     private boolean benchmarkStarted;
 
@@ -49,6 +54,10 @@ public class NeuralBenchActivity extends Activity {
     private int outputHeight;
     private ByteBuffer inputTensor;
     private ByteBuffer outputTensor;
+    private Bitmap inputBitmap;
+    private Canvas inputCanvas;
+    private Paint paint;
+    private int[] inputPixels;
     private int[] previewPixels;
     private Bitmap previewBitmap;
 
@@ -86,6 +95,9 @@ public class NeuralBenchActivity extends Activity {
         if (gpuDelegate != null) {
             gpuDelegate.close();
         }
+        if (nnApiDelegate != null) {
+            nnApiDelegate.close();
+        }
         super.onDestroy();
     }
 
@@ -117,14 +129,30 @@ public class NeuralBenchActivity extends Activity {
         runButton.setOnClickListener(view -> runBenchmark());
         root.addView(runButton, matchWrap());
 
+        LinearLayout imageRow = new LinearLayout(this);
+        imageRow.setOrientation(LinearLayout.HORIZONTAL);
+        imageRow.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams imageRowParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(420));
+        imageRowParams.setMargins(0, dp(14), 0, 0);
+        root.addView(imageRow, imageRowParams);
+
+        inputView = new ImageView(this);
+        inputView.setBackgroundColor(Color.rgb(8, 11, 16));
+        inputView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        imageRow.addView(inputView, new LinearLayout.LayoutParams(
+                0,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                1f));
+
         previewView = new ImageView(this);
         previewView.setBackgroundColor(Color.rgb(8, 11, 16));
         previewView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        LinearLayout.LayoutParams previewParams = new LinearLayout.LayoutParams(
+        imageRow.addView(previewView, new LinearLayout.LayoutParams(
+                0,
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(420));
-        previewParams.setMargins(0, dp(14), 0, 0);
-        root.addView(previewView, previewParams);
+                2f));
 
         setContentView(scrollView);
     }
@@ -136,27 +164,73 @@ public class NeuralBenchActivity extends Activity {
     }
 
     private void initializeModel() throws IOException {
+        createInterpreter(DelegateMode.GPU);
+        allocateTensorsFromInterpreter();
+        fillInputPattern(0);
+        drawInputBitmap(0);
+        bitmapToTensor();
+        outputTensor.rewind();
+        interpreter.run(inputTensor, outputTensor);
+        tensorToPreviewBitmap();
+        runOnUiThread(() -> {
+            inputView.setImageBitmap(inputBitmap);
+            previewView.setImageBitmap(previewBitmap);
+        });
+        Log.i(TAG, baseStatus().replace('\n', ' '));
+    }
+
+    private void createInterpreter(DelegateMode mode) throws IOException {
+        closeInterpreter();
         ByteBuffer modelBuffer = loadAsset(MODEL_ASSET);
         Interpreter.Options options = new Interpreter.Options();
         options.setNumThreads(4);
-        try {
-            gpuDelegate = new GpuDelegate();
-            options.addDelegate(gpuDelegate);
-            interpreter = new Interpreter(modelBuffer, options);
-            delegateLabel = "TensorFlow Lite GPU delegate";
-        } catch (Throwable gpuError) {
-            Log.w(TAG, "GPU delegate failed, falling back to CPU", gpuError);
-            if (gpuDelegate != null) {
-                gpuDelegate.close();
-                gpuDelegate = null;
+        if (mode == DelegateMode.GPU) {
+            try {
+                gpuDelegate = new GpuDelegate();
+                options.addDelegate(gpuDelegate);
+                interpreter = new Interpreter(modelBuffer, options);
+                delegateLabel = "TensorFlow Lite GPU delegate";
+                return;
+            } catch (Throwable gpuError) {
+                Log.w(TAG, "GPU delegate failed", gpuError);
+                closeInterpreter();
+                throw gpuError;
             }
-            modelBuffer.rewind();
-            Interpreter.Options cpuOptions = new Interpreter.Options();
-            cpuOptions.setNumThreads(4);
-            interpreter = new Interpreter(modelBuffer, cpuOptions);
-            delegateLabel = "CPU fallback: " + gpuError.getClass().getSimpleName();
+        }
+        if (mode == DelegateMode.NNAPI) {
+            try {
+                nnApiDelegate = new NnApiDelegate();
+                options.addDelegate(nnApiDelegate);
+                interpreter = new Interpreter(modelBuffer, options);
+                delegateLabel = "Android NNAPI delegate";
+                return;
+            } catch (Throwable nnapiError) {
+                Log.w(TAG, "NNAPI delegate failed", nnapiError);
+                closeInterpreter();
+                throw nnapiError;
+            }
         }
 
+        interpreter = new Interpreter(modelBuffer, options);
+        delegateLabel = "CPU/XNNPACK";
+    }
+
+    private void closeInterpreter() {
+        if (interpreter != null) {
+            interpreter.close();
+            interpreter = null;
+        }
+        if (gpuDelegate != null) {
+            gpuDelegate.close();
+            gpuDelegate = null;
+        }
+        if (nnApiDelegate != null) {
+            nnApiDelegate.close();
+            nnApiDelegate = null;
+        }
+    }
+
+    private void allocateTensorsFromInterpreter() {
         Tensor input = interpreter.getInputTensor(0);
         Tensor output = interpreter.getOutputTensor(0);
         int[] inputShape = input.shape();
@@ -179,11 +253,12 @@ public class NeuralBenchActivity extends Activity {
                 .order(ByteOrder.nativeOrder());
         outputTensor = ByteBuffer.allocateDirect(outputWidth * outputHeight * 3 * Float.BYTES)
                 .order(ByteOrder.nativeOrder());
+        inputPixels = new int[inputWidth * inputHeight];
+        inputBitmap = Bitmap.createBitmap(inputWidth, inputHeight, Bitmap.Config.ARGB_8888);
+        inputCanvas = new Canvas(inputBitmap);
+        paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         previewPixels = new int[outputWidth * outputHeight];
         previewBitmap = Bitmap.createBitmap(outputWidth, outputHeight, Bitmap.Config.ARGB_8888);
-
-        fillInputPattern(0);
-        Log.i(TAG, baseStatus().replace('\n', ' '));
     }
 
     private boolean isNhwcRgb(int[] shape) {
@@ -199,6 +274,7 @@ public class NeuralBenchActivity extends Activity {
                 Log.i(TAG, "\n" + report.text);
                 runOnUiThread(() -> {
                     statusView.setText(report.text);
+                    inputView.setImageBitmap(inputBitmap);
                     previewView.setImageBitmap(previewBitmap);
                     runButton.setEnabled(true);
                 });
@@ -213,27 +289,63 @@ public class NeuralBenchActivity extends Activity {
     }
 
     private BenchmarkReport runAllBenchmarks() {
-        fillInputPattern(0);
-        runInferenceLoops(20, false, 0);
+        StringBuilder text = new StringBuilder();
+        text.append("Model: ").append(MODEL_ASSET)
+                .append("\nInput: ").append(inputWidth).append("x").append(inputHeight)
+                .append("\nOutput: ").append(outputWidth).append("x").append(outputHeight)
+                .append("\n\nBenchmark results:");
 
-        TimedResult pureInference = runInferenceLoops(240, false, 0);
-        TimedResult inputAndInference = runInferenceLoops(180, true, 0);
-        TimedResult occasionalPreview = runInferenceLoops(180, true, 30);
-        TimedResult everyFramePreview = runInferenceLoops(45, true, 1);
+        text.append(runDelegateBenchmarks(DelegateMode.GPU));
+        text.append(runDelegateBenchmarks(DelegateMode.NNAPI));
 
+        text.append("\n\nInterpretation:")
+                .append("\nGPU is the known-good TensorFlow Lite GPU delegate path.")
+                .append("\nNNAPI is our first local NPU attempt. If it is slower or fails, Android is not routing this model like Qualcomm AI Hub's hosted NPU path.")
+                .append("\nPreview modes include CPU float-to-bitmap conversion and are intentionally bad-path measurements.")
+                .append("\nA renderer integration must avoid the preview path entirely.");
+        drawInputBitmap(0);
+        bitmapToTensor();
+        outputTensor.rewind();
+        interpreter.run(inputTensor, outputTensor);
         tensorToPreviewBitmap();
+        return new BenchmarkReport(text.toString());
+    }
 
-        String text = baseStatus()
-                + "\n\nBenchmark results:"
-                + "\nPure TFLite run only: " + pureInference.summary()
-                + "\nGenerate input + run: " + inputAndInference.summary()
-                + "\nPreview every 30 frames: " + occasionalPreview.summary()
-                + "\nPreview every frame: " + everyFramePreview.summary()
-                + "\n\nInterpretation:"
-                + "\nPure run includes TFLite synchronization into the output buffer."
-                + "\nPreview modes include CPU float-to-bitmap conversion and are intentionally bad-path measurements."
-                + "\nA renderer integration must avoid the preview path entirely.";
-        return new BenchmarkReport(text);
+    private String runDelegateBenchmarks(DelegateMode mode) {
+        try {
+            createInterpreter(mode);
+            allocateTensorsFromInterpreter();
+            fillInputPattern(0);
+            runInferenceLoops(20, false, 0);
+
+            TimedResult pureInference = runInferenceLoops(240, false, 0);
+            TimedResult inputAndInference = runInferenceLoops(180, true, 0);
+            TimedResult occasionalPreview = mode == DelegateMode.GPU
+                    ? runInferenceLoops(180, true, 30)
+                    : null;
+            TimedResult everyFramePreview = mode == DelegateMode.GPU
+                    ? runInferenceLoops(45, true, 1)
+                    : null;
+
+            StringBuilder result = new StringBuilder()
+                    .append("\n\n")
+                    .append(delegateLabel)
+                    .append(":")
+                    .append("\nPure TFLite run only: ")
+                    .append(pureInference.summary())
+                    .append("\nGenerate input + run: ")
+                    .append(inputAndInference.summary());
+            if (occasionalPreview != null) {
+                result.append("\nPreview every 30 frames: ")
+                        .append(occasionalPreview.summary())
+                        .append("\nPreview every frame: ")
+                        .append(everyFramePreview.summary());
+            }
+            return result.toString();
+        } catch (Throwable throwable) {
+            Log.e(TAG, mode + " benchmark failed", throwable);
+            return "\n\n" + mode.label + " failed: " + throwable;
+        }
     }
 
     private TimedResult runInferenceLoops(int frames, boolean regenerateInput, int previewEvery) {
@@ -285,6 +397,76 @@ public class NeuralBenchActivity extends Activity {
                 inputTensor.putFloat(red);
                 inputTensor.putFloat(green);
                 inputTensor.putFloat(blue);
+            }
+        }
+        inputTensor.rewind();
+    }
+
+    private void drawInputBitmap(int frame) {
+        inputCanvas.drawColor(Color.rgb(14, 17, 24));
+
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(Math.max(1f, inputWidth / 160f));
+        paint.setColor(Color.rgb(47, 60, 78));
+        int grid = Math.max(12, inputWidth / 12);
+        for (int x = 0; x < inputWidth; x += grid) {
+            inputCanvas.drawLine(x, 0, x, inputHeight, paint);
+        }
+        for (int y = 0; y < inputHeight; y += grid) {
+            inputCanvas.drawLine(0, y, inputWidth, y, paint);
+        }
+
+        float t = (frame % 180) / 180f;
+        float centerX = inputWidth * (0.12f + 0.76f * t);
+        float centerY = inputHeight * (0.56f + 0.22f * (float) Math.sin(frame * 0.11f));
+
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(Color.rgb(255, 202, 77));
+        inputCanvas.drawCircle(centerX, centerY, inputWidth * 0.05f, paint);
+
+        paint.setColor(Color.rgb(76, 217, 245));
+        RectF player = new RectF(
+                inputWidth * 0.12f,
+                inputHeight * 0.20f,
+                inputWidth * 0.36f,
+                inputHeight * 0.42f);
+        inputCanvas.drawRoundRect(player, inputWidth * 0.02f, inputWidth * 0.02f, paint);
+
+        paint.setColor(Color.rgb(250, 88, 124));
+        float enemyX = inputWidth * (0.76f - 0.16f * (float) Math.sin(frame * 0.07f));
+        inputCanvas.drawRect(
+                enemyX,
+                inputHeight * 0.18f,
+                enemyX + inputWidth * 0.09f,
+                inputHeight * 0.42f,
+                paint);
+
+        paint.setColor(Color.rgb(159, 245, 92));
+        paint.setTextSize(Math.max(16f, inputWidth / 12f));
+        paint.setFakeBoldText(true);
+        inputCanvas.drawText("SR", inputWidth * 0.08f, inputHeight * 0.86f, paint);
+        paint.setFakeBoldText(false);
+
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(Math.max(2f, inputWidth / 80f));
+        paint.setColor(Color.rgb(241, 245, 249));
+        inputCanvas.drawLine(
+                inputWidth * 0.45f,
+                inputHeight * 0.78f,
+                inputWidth * 0.90f,
+                inputHeight * 0.66f,
+                paint);
+    }
+
+    private void bitmapToTensor() {
+        inputBitmap.getPixels(inputPixels, 0, inputWidth, 0, 0, inputWidth, inputHeight);
+        inputTensor.rewind();
+        for (int y = 0; y < inputHeight; y++) {
+            for (int x = 0; x < inputWidth; x++) {
+                int color = inputPixels[y * inputWidth + x];
+                inputTensor.putFloat(Color.red(color) / 255f);
+                inputTensor.putFloat(Color.green(color) / 255f);
+                inputTensor.putFloat(Color.blue(color) / 255f);
             }
         }
         inputTensor.rewind();
@@ -352,6 +534,18 @@ public class NeuralBenchActivity extends Activity {
 
         BenchmarkReport(String text) {
             this.text = text;
+        }
+    }
+
+    private enum DelegateMode {
+        GPU("GPU delegate"),
+        NNAPI("NNAPI delegate"),
+        CPU("CPU/XNNPACK");
+
+        final String label;
+
+        DelegateMode(String label) {
+            this.label = label;
         }
     }
 
