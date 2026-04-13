@@ -258,6 +258,9 @@ dependencies {
     implementation(libs.kotlin.coroutines)
     implementation(libs.timber)
     implementation(libs.zxing)
+    implementation("org.tensorflow:tensorflow-lite:2.16.1")
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.16.1")
+    implementation("org.tensorflow:tensorflow-lite-gpu-api:2.16.1")
 
     // Google Protobufs
     implementation(libs.protobuf.java)
