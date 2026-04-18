@@ -23,7 +23,7 @@ val keystoreProperties: Properties? = if (keystorePropertiesFile.exists()) {
 // Add PostHog API key and host as build-time variables
 val posthogApiKey: String = project.findProperty("POSTHOG_API_KEY") as String? ?: System.getenv("POSTHOG_API_KEY") ?: ""
 val posthogHost: String = project.findProperty("POSTHOG_HOST") as String? ?: System.getenv("POSTHOG_HOST") ?: "https://us.i.posthog.com"
-val redMagicSpoofApplicationId = "com.kurogame.wutheringwaves.global"
+val redMagicSpoofApplicationId = "com.miHoYo.Yuanshen"
 
 room {
     schemaDirectory("$projectDir/schemas")
