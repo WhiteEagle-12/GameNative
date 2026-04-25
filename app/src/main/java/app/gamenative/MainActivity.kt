@@ -57,6 +57,7 @@ import timber.log.Timber
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    private val controllerLogTag = "GNInputTrace"
 
     companion object {
         private var totalIndex = 0
@@ -461,6 +462,21 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         // Log.d("MainActivity$index", "dispatchKeyEvent(${event.keyCode}):\n$event")
+        if (event.device?.let { com.winlator.inputcontrols.ExternalController.isGameController(it) } == true) {
+            Timber.tag(controllerLogTag).d(
+                "dispatchKeyEvent action=%s keyCode=%d repeat=%d deviceId=%d source=0x%s name=%s",
+                when (event.action) {
+                    KeyEvent.ACTION_DOWN -> "DOWN"
+                    KeyEvent.ACTION_UP -> "UP"
+                    else -> event.action.toString()
+                },
+                event.keyCode,
+                event.repeatCount,
+                event.deviceId,
+                Integer.toHexString(event.source),
+                event.device?.name ?: "unknown",
+            )
+        }
 
         var eventDispatched = PluviaApp.events.emit(AndroidEvent.KeyEvent(event)) { keyEvent ->
             keyEvent.any { it }
@@ -483,6 +499,22 @@ class MainActivity : ComponentActivity() {
 
     override fun dispatchGenericMotionEvent(ev: MotionEvent?): Boolean {
         // Log.d("MainActivity$index", "dispatchGenericMotionEvent(${ev?.deviceId}:${ev?.device?.name}):\n$ev")
+        if (ev?.device?.let { com.winlator.inputcontrols.ExternalController.isGameController(it) } == true) {
+            Timber.tag(controllerLogTag).d(
+                "dispatchGenericMotionEvent action=%d deviceId=%d source=0x%s axes[x=%.3f,y=%.3f,z=%.3f,rz=%.3f,hatX=%.3f,hatY=%.3f,l=%.3f,r=%.3f]",
+                ev.action,
+                ev.deviceId,
+                Integer.toHexString(ev.source),
+                ev.getAxisValue(MotionEvent.AXIS_X),
+                ev.getAxisValue(MotionEvent.AXIS_Y),
+                ev.getAxisValue(MotionEvent.AXIS_Z),
+                ev.getAxisValue(MotionEvent.AXIS_RZ),
+                ev.getAxisValue(MotionEvent.AXIS_HAT_X),
+                ev.getAxisValue(MotionEvent.AXIS_HAT_Y),
+                ev.getAxisValue(MotionEvent.AXIS_LTRIGGER),
+                ev.getAxisValue(MotionEvent.AXIS_RTRIGGER),
+            )
+        }
 
         val eventDispatched = PluviaApp.events.emit(AndroidEvent.MotionEvent(ev)) { event ->
             event.any { it }

@@ -46,6 +46,7 @@ import java.util.TimerTask;
 
 public class InputControlsView extends View {
     public static final float DEFAULT_OVERLAY_OPACITY = 0.4f;
+    private static final String TAG = "GNInputTrace";
     private boolean editMode = false;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path = new Path();
@@ -778,6 +779,7 @@ public class InputControlsView extends View {
     public boolean onGenericMotionEvent(MotionEvent event) {
         if (!editMode && profile != null) {
             ExternalController controller = profile.getController(event.getDeviceId());
+            Log.d(TAG, "onGenericMotionEvent deviceId=" + event.getDeviceId() + " source=0x" + Integer.toHexString(event.getSource()));
             if (controller != null && controller.updateStateFromMotionEvent(event)) {
                 ExternalControllerBinding controllerBinding;
                 controllerBinding = controller.getControllerBinding(KeyEvent.KEYCODE_BUTTON_L2);
@@ -835,6 +837,9 @@ public class InputControlsView extends View {
             int pointerId = event.getPointerId(actionIndex);
             int actionMasked = event.getActionMasked();
             boolean handled = false;
+            if (actionMasked == MotionEvent.ACTION_DOWN || actionMasked == MotionEvent.ACTION_POINTER_DOWN) {
+                Log.d(TAG, "onTouchEvent DOWN pointerId=" + pointerId + " x=" + event.getX(actionIndex) + " y=" + event.getY(actionIndex));
+            }
 
             switch (actionMasked) {
                 case MotionEvent.ACTION_DOWN:
@@ -852,6 +857,7 @@ public class InputControlsView extends View {
                     for (ControlElement element : profile.getElements()) {
                         if (element.handleTouchDown(pointerId, x, y)) {
                             performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                            Log.d(TAG, "element handleTouchDown pointerId=" + pointerId + " type=" + element.getType() + " binding=" + element.getBindingAt(0));
                             handled = true;
                         }
                         if (element.getBindingAt(0) == Binding.MOUSE_LEFT_BUTTON) {
@@ -861,6 +867,7 @@ public class InputControlsView extends View {
                             touchpadView.setPointerButtonRightEnabled(false);
                         }
                     }
+                    Log.d(TAG, "onTouchEvent DOWN handled=" + handled + " touchpadFallback=" + (!handled));
                     if (!handled) touchpadView.onTouchEvent(event);
                     break;
                 }
@@ -884,6 +891,9 @@ public class InputControlsView extends View {
                         handled = false;
                         for (ControlElement element : profile.getElements()) {
                             if (element.handleTouchMove(i, x, y)) handled = true;
+                        }
+                        if (handled) {
+                            Log.d(TAG, "onTouchEvent MOVE pointerIndex=" + i + " x=" + x + " y=" + y + " handledByElement=true");
                         }
                         if (!handled) touchpadView.onTouchEvent(event);
                     }
@@ -909,6 +919,7 @@ public class InputControlsView extends View {
                         }
                     }
                     for (ControlElement element : profile.getElements()) if (element.handleTouchUp(pointerId)) handled = true;
+                    Log.d(TAG, "onTouchEvent UP/CANCEL pointerId=" + pointerId + " handled=" + handled + " touchpadFallback=" + (!handled));
                     if (!handled) touchpadView.onTouchEvent(event);
                     break;
             }
@@ -944,6 +955,7 @@ public class InputControlsView extends View {
         if (binding.isGamepad()) {
             WinHandler winHandler = xServer != null ? xServer.getWinHandler() : null;
             GamepadState state = profile.getGamepadState();
+            Log.d(TAG, "handleInputEvent GAMEPAD binding=" + binding + " down=" + isActionDown + " offset=" + offset);
 
             int buttonIdx = binding.ordinal() - Binding.GAMEPAD_BUTTON_A.ordinal();
             if (buttonIdx <= ExternalController.IDX_BUTTON_R2) {
@@ -976,6 +988,7 @@ public class InputControlsView extends View {
             if (winHandler != null) {
                 ExternalController controller = winHandler.getCurrentController();
                 if (controller != null) controller.state.copy(state);
+                Log.d(TAG, "handleInputEvent GAMEPAD state=" + summarizeGamepadState(state) + " currentController=" + (controller != null ? controller.getName() + "#" + controller.getDeviceId() : "null"));
                 winHandler.sendGamepadState();
                 winHandler.sendVirtualGamepadState(state);
             }
@@ -1005,6 +1018,29 @@ public class InputControlsView extends View {
                 }
             }
         }
+    }
+
+    private String summarizeGamepadState(GamepadState state) {
+        return "buttons[A=" + state.isPressed(ExternalController.IDX_BUTTON_A) +
+                ",B=" + state.isPressed(ExternalController.IDX_BUTTON_B) +
+                ",X=" + state.isPressed(ExternalController.IDX_BUTTON_X) +
+                ",Y=" + state.isPressed(ExternalController.IDX_BUTTON_Y) +
+                ",L1=" + state.isPressed(ExternalController.IDX_BUTTON_L1) +
+                ",R1=" + state.isPressed(ExternalController.IDX_BUTTON_R1) +
+                ",L2=" + state.isPressed(ExternalController.IDX_BUTTON_L2) +
+                ",R2=" + state.isPressed(ExternalController.IDX_BUTTON_R2) +
+                ",Start=" + state.isPressed(ExternalController.IDX_BUTTON_START) +
+                ",Select=" + state.isPressed(ExternalController.IDX_BUTTON_SELECT) +
+                "] sticks[LX=" + state.thumbLX +
+                ",LY=" + state.thumbLY +
+                ",RX=" + state.thumbRX +
+                ",RY=" + state.thumbRY +
+                "] triggers[L=" + state.triggerL +
+                ",R=" + state.triggerR +
+                "] dpad[U=" + state.dpad[0] +
+                ",R=" + state.dpad[1] +
+                ",D=" + state.dpad[2] +
+                ",L=" + state.dpad[3] + "]";
     }
 
     public Bitmap getIcon(byte id) {

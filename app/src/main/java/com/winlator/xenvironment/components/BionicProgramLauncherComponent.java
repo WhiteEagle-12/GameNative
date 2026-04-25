@@ -182,14 +182,19 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
 
         // Get the number of enabled players directly from ControllerManager.
         final int enabledPlayerCount = MAX_PLAYERS;
+        Context context = environment.getContext();
+        File imageFsTmpDir = new File(context.getFilesDir(), "imagefs/tmp");
+        if (!imageFsTmpDir.exists() && !imageFsTmpDir.mkdirs()) {
+            Log.w("EVSHIM_HOST", "Failed to create imagefs tmp directory: " + imageFsTmpDir.getAbsolutePath());
+        }
         for (int i = 0; i < enabledPlayerCount; i++) {
             String memPath;
             if (i == 0) {
                 // Player 1 uses the original, non-numbered path that is known to work.
-                memPath = "/data/data/app.gamenative/files/imagefs/tmp/gamepad.mem";
+                memPath = new File(imageFsTmpDir, "gamepad.mem").getAbsolutePath();
             } else {
                 // Players 2, 3, 4 use a 1-based index.
-                memPath = "/data/data/app.gamenative/files/imagefs/tmp/gamepad" + i + ".mem";
+                memPath = new File(imageFsTmpDir, "gamepad" + i + ".mem").getAbsolutePath();
             }
 
             File memFile = new File(memPath);
@@ -200,7 +205,6 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
                 Log.e("EVSHIM_HOST", "Failed to create mem file for player index "+i, e);
             }
         }
-        Context context = environment.getContext();
         ImageFs imageFs = ImageFs.find(context);
         File rootDir = imageFs.getRootDir();
 
@@ -225,6 +229,7 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
 
         // Use the ControllerManager's dynamic count for the environment variable
         envVars.put("EVSHIM_MAX_PLAYERS", String.valueOf(enabledPlayerCount));
+        envVars.put("EVSHIM_DEBUG", "1");
         if (true) {
             envVars.put("EVSHIM_SHM_ID", 1);
         }
@@ -291,11 +296,20 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
         String sysvPath = imageFs.getLibDir() + "/libandroid-sysvshm.so";
         String evshimPath = imageFs.getLibDir() + "/libevshim.so";
         String replacePath = imageFs.getLibDir() + "/libredirect-bionic.so";
+        File packagedEvshim = new File(context.getApplicationInfo().nativeLibraryDir, "libevshim.so");
+        File imageFsEvshim = new File(evshimPath);
+
+        if (packagedEvshim.exists()) {
+            FileUtils.copy(packagedEvshim, imageFsEvshim);
+            FileUtils.chmod(imageFsEvshim, 0755);
+            Log.i("EVSHIM_HOST", "Synced packaged libevshim.so to " + imageFsEvshim.getAbsolutePath() + " size=" + imageFsEvshim.length());
+        } else {
+            Log.w("EVSHIM_HOST", "Packaged libevshim.so missing at " + packagedEvshim.getAbsolutePath());
+        }
 
         if (new File(sysvPath).exists()) ld_preload += sysvPath;
 
-
-        ld_preload += ":" + evshimPath;
+        if (imageFsEvshim.exists()) ld_preload += ":" + evshimPath;
         ld_preload += ":" + replacePath;
 
         envVars.put("LD_PRELOAD", ld_preload);

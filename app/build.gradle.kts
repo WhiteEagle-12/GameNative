@@ -47,13 +47,13 @@ android {
     }
 
     defaultConfig {
-        applicationId = "app.gamenative"
+        applicationId = "com.activision.callofduty.shooter"
 
         minSdk = 26
         targetSdk = 28
 
-        versionCode = 14
-        versionName = "0.9.0"
+        versionCode = 10014
+        versionName = "0.9.0-rollback"
 
         buildConfigField("boolean", "GOLD", "false")
         fun secret(name: String) =

@@ -359,6 +359,7 @@ public class WinHandler {
         switch (requestCode) {
             case RequestCodes.INIT:
                 this.initReceived = true;
+                Log.i(TAG, "handleRequest INIT port=" + port);
                 synchronized (this.actions) {
                     this.actions.notify();
                 }
@@ -386,8 +387,17 @@ public class WinHandler {
                 final ControlsProfile profile = inputControlsView.getProfile();
                 final boolean useVirtualGamepad = inputControlsView != null && profile != null && profile.isVirtualGamepad();
                 int processId = this.receiveData.getInt();
+                Log.i(TAG, "handleRequest GET_GAMEPAD port=" + port
+                        + " processId=" + processId
+                        + " isXInput=" + isXInput
+                        + " notify=" + notify
+                        + " preferredApi=" + this.preferredInputApi
+                        + " useVirtual=" + useVirtualGamepad
+                        + " currentController=" + (this.currentController != null ? this.currentController.getName() + "#" + this.currentController.getDeviceId() : "null")
+                        + " profile=" + (profile != null ? profile.getName() + "#" + profile.id : "null"));
                 if (!useVirtualGamepad && ((externalController = this.currentController) == null || !externalController.isConnected())) {
                     this.currentController = ExternalController.getController(0);
+                    Log.i(TAG, "GET_GAMEPAD refreshed currentController=" + (this.currentController != null ? this.currentController.getName() + "#" + this.currentController.getDeviceId() : "null"));
                 }
                 boolean enabled2 = this.currentController != null || useVirtualGamepad;
                 if (enabled2) {
@@ -424,6 +434,7 @@ public class WinHandler {
                     } else {
                         this.gamepadClients.remove(Integer.valueOf(port));
                     }
+                    Log.i(TAG, "GET_GAMEPAD response enabled=" + enabled + " clients=" + this.gamepadClients.size() + " xinputProcesses=" + this.xinputProcesses.size());
                     final boolean finalEnabled = enabled;
                     addAction(() -> {
                         this.sendData.rewind();
@@ -454,9 +465,8 @@ public class WinHandler {
                     return;
                 }
                 enabled = enabled2;
-                if (!enabled) {
-                }
                 this.gamepadClients.remove(Integer.valueOf(port));
+                Log.i(TAG, "GET_GAMEPAD fallback response enabled=" + enabled + " clients=" + this.gamepadClients.size());
                 final boolean finalEnabled2 = enabled;
                 addAction(() -> {
                     this.sendData.rewind();
@@ -481,8 +491,15 @@ public class WinHandler {
                 final boolean useVirtualGamepad2 = inputControlsView != null && profile2 != null && profile2.isVirtualGamepad();
                 ExternalController externalController2 = this.currentController;
                 final boolean enabled3 = externalController2 != null || useVirtualGamepad2;
+                Log.i(TAG, "handleRequest GET_GAMEPAD_STATE port=" + port
+                        + " gamepadId=" + gamepadId
+                        + " enabled=" + enabled3
+                        + " useVirtual=" + useVirtualGamepad2
+                        + " currentController=" + (externalController2 != null ? externalController2.getName() + "#" + externalController2.getDeviceId() : "null")
+                        + " profile=" + (profile2 != null ? profile2.getName() + "#" + profile2.id : "null"));
                 if (externalController2 != null && externalController2.getDeviceId() != gamepadId) {
                     this.currentController = null;
+                    Log.w(TAG, "GET_GAMEPAD_STATE cleared currentController due to id mismatch, requested=" + gamepadId);
                 }
                 addAction(() -> {
                     sendData.rewind();
@@ -500,6 +517,7 @@ public class WinHandler {
                 });
                 return;
             case RequestCodes.RELEASE_GAMEPAD:
+                Log.i(TAG, "handleRequest RELEASE_GAMEPAD port=" + port + " clients=" + this.gamepadClients.size() + " xinputProcesses=" + this.xinputProcesses.size());
                 this.currentController = null;
                 this.gamepadClients.clear();
                 this.xinputProcesses.clear();
@@ -519,24 +537,28 @@ public class WinHandler {
     public void start() {
         try {
             this.localhost = InetAddress.getLocalHost();
+            File imageFsTmpDir = new File(activity.getFilesDir(), "imagefs/tmp");
+            if (!imageFsTmpDir.exists() && !imageFsTmpDir.mkdirs()) {
+                Log.w(TAG, "Failed to create imagefs tmp directory: " + imageFsTmpDir.getAbsolutePath());
+            }
             // Player 1 (currentController) gets the original non-numbered file
-            String p1_mem_path = "/data/data/app.gamenative/files/imagefs/tmp/gamepad.mem";
+            String p1_mem_path = new File(imageFsTmpDir, "gamepad.mem").getAbsolutePath();
             File p1_memFile = new File(p1_mem_path);
             p1_memFile.getParentFile().mkdirs();
             try (RandomAccessFile raf = new RandomAccessFile(p1_memFile, "rw")) {
                 raf.setLength(64);
                 gamepadBuffer = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, 64);
                 gamepadBuffer.order(ByteOrder.LITTLE_ENDIAN);
-                Log.i(TAG, "Successfully created and mapped gamepad file for Player 1");
+                Log.i(TAG, "Successfully created and mapped gamepad file for Player 1 at " + p1_mem_path);
             }
             for (int i = 0; i < extraGamepadBuffers.length; i++) {
-                String extra_mem_path = "/data/data/app.gamenative/files/imagefs/tmp/gamepad" + (i + 1) + ".mem";
+                String extra_mem_path = new File(imageFsTmpDir, "gamepad" + (i + 1) + ".mem").getAbsolutePath();
                 File extra_memFile = new File(extra_mem_path);
                 try (RandomAccessFile raf = new RandomAccessFile(extra_memFile, "rw")) {
                     raf.setLength(64);
                     extraGamepadBuffers[i] = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, 64);
                     extraGamepadBuffers[i].order(ByteOrder.LITTLE_ENDIAN);
-                    Log.i(TAG, "Successfully created and mapped gamepad file for Player " + (i + 2));
+                    Log.i(TAG, "Successfully created and mapped gamepad file for Player " + (i + 2) + " at " + extra_mem_path);
                 }
             }
         } catch (IOException e) {
@@ -670,11 +692,26 @@ public class WinHandler {
 
     public void sendGamepadState() {
         if (!this.initReceived || this.gamepadClients.isEmpty()) {
+            Timber.tag("GNInputTrace").d("sendGamepadState skipped initReceived=%s clients=%d", this.initReceived, this.gamepadClients.size());
+            Log.i(TAG, "sendGamepadState skipped initReceived=" + this.initReceived + " clients=" + this.gamepadClients.size());
             return;
         }
         final ControlsProfile profile = inputControlsView.getProfile();
         final boolean useVirtualGamepad = profile != null && profile.isVirtualGamepad();
         final boolean enabled = this.currentController != null || useVirtualGamepad;
+        final String stateSummary = useVirtualGamepad && profile != null
+                ? summarizeGamepadState(profile.getGamepadState())
+                : this.currentController != null ? summarizeGamepadState(this.currentController.state) : "no-state";
+        Timber.tag("GNInputTrace").d(
+                "sendGamepadState enabled=%s useVirtual=%s clients=%d currentController=%s profile=%s state=%s",
+                enabled,
+                useVirtualGamepad,
+                this.gamepadClients.size(),
+                this.currentController != null ? this.currentController.getName() + "#" + this.currentController.getDeviceId() : "null",
+                profile != null ? profile.getName() + "#" + profile.id : "null",
+                stateSummary
+        );
+        Log.i(TAG, "sendGamepadState enabled=" + enabled + " useVirtual=" + useVirtualGamepad + " clients=" + this.gamepadClients.size() + " state=" + stateSummary);
         Iterator<Integer> it = this.gamepadClients.iterator();
         while (it.hasNext()) {
             final int port = it.next().intValue();
@@ -698,6 +735,20 @@ public class WinHandler {
     public boolean onGenericMotionEvent(MotionEvent event) {
         boolean handled = false;
         ExternalController externalController = this.currentController;
+        Timber.tag("GNInputTrace").d(
+                "WinHandler.onGenericMotionEvent deviceId=%d source=0x%s currentController=%s axes[x=%.3f,y=%.3f,z=%.3f,rz=%.3f,hatX=%.3f,hatY=%.3f,l=%.3f,r=%.3f]",
+                event.getDeviceId(),
+                Integer.toHexString(event.getSource()),
+                externalController != null ? externalController.getName() + "#" + externalController.getDeviceId() : "null",
+                event.getAxisValue(MotionEvent.AXIS_X),
+                event.getAxisValue(MotionEvent.AXIS_Y),
+                event.getAxisValue(MotionEvent.AXIS_Z),
+                event.getAxisValue(MotionEvent.AXIS_RZ),
+                event.getAxisValue(MotionEvent.AXIS_HAT_X),
+                event.getAxisValue(MotionEvent.AXIS_HAT_Y),
+                event.getAxisValue(MotionEvent.AXIS_LTRIGGER),
+                event.getAxisValue(MotionEvent.AXIS_RTRIGGER)
+        );
         // Adopt newly connected controller if deviceId mismatches
         if ((externalController == null || externalController.getDeviceId() != event.getDeviceId()) && ExternalController.isJoystickDevice(event)) {
             ExternalController adopted = null;
@@ -720,6 +771,7 @@ public class WinHandler {
         }
         if (externalController != null && externalController.getDeviceId() == event.getDeviceId() && (handled = this.currentController.updateStateFromMotionEvent(event))) {
             if (handled) {
+                Timber.tag("GNInputTrace").d("WinHandler.onGenericMotionEvent handled state=%s", summarizeGamepadState(this.currentController.state));
                 sendGamepadState();
                 sendMemoryFileState();
             }
@@ -731,6 +783,15 @@ public class WinHandler {
         MappedByteBuffer buffer = null;
         boolean handled = false;
         ExternalController externalController = this.currentController;
+        Timber.tag("GNInputTrace").d(
+                "WinHandler.onKeyEvent action=%d keyCode=%d repeat=%d deviceId=%d source=0x%s currentController=%s",
+                event.getAction(),
+                event.getKeyCode(),
+                event.getRepeatCount(),
+                event.getDeviceId(),
+                Integer.toHexString(event.getSource()),
+                externalController != null ? externalController.getName() + "#" + externalController.getDeviceId() : "null"
+        );
         buffer = gamepadBuffer;
         // If this is a gamepad event but our controller is null or mismatched, adopt it
         InputDevice device = event.getDevice();
@@ -766,6 +827,7 @@ public class WinHandler {
             }
             sendMemoryFileState(this.currentController, buffer);
             if (handled) {
+                Timber.tag("GNInputTrace").d("WinHandler.onKeyEvent handled state=%s", summarizeGamepadState(this.currentController.state));
                 sendGamepadState();
             }
         }
@@ -828,12 +890,17 @@ public class WinHandler {
         sdlButtons[14] = state.dpad[1] ? (byte)1 : (byte)0;      // DPAD_RIGHT
         buffer.put(sdlButtons);
         buffer.put((byte)0); // Ignored HAT value
+        buffer.force();
     }
 
     public void sendVirtualGamepadState(GamepadState state) {
         if (gamepadBuffer == null || state == null) {
+            Timber.tag("GNInputTrace").d("sendVirtualGamepadState skipped buffer=%s state=%s", gamepadBuffer != null, state != null);
+            Log.i(TAG, "sendVirtualGamepadState skipped buffer=" + (gamepadBuffer != null) + " state=" + (state != null));
             return;
         }
+        Timber.tag("GNInputTrace").d("sendVirtualGamepadState state=%s", summarizeGamepadState(state));
+        Log.i(TAG, "sendVirtualGamepadState state=" + summarizeGamepadState(state));
         gamepadBuffer.clear();
 
         gamepadBuffer.putShort((short)(state.thumbLX * 32767));
@@ -868,6 +935,30 @@ public class WinHandler {
         sdlButtons[14] = state.dpad[1] ? (byte)1 : (byte)0;      // DPAD_RIGHT
         gamepadBuffer.put(sdlButtons);
         gamepadBuffer.put((byte)0); // Ignored HAT value
+        gamepadBuffer.force();
+    }
+
+    private String summarizeGamepadState(GamepadState state) {
+        return "buttons[A=" + state.isPressed(ExternalController.IDX_BUTTON_A) +
+                ",B=" + state.isPressed(ExternalController.IDX_BUTTON_B) +
+                ",X=" + state.isPressed(ExternalController.IDX_BUTTON_X) +
+                ",Y=" + state.isPressed(ExternalController.IDX_BUTTON_Y) +
+                ",L1=" + state.isPressed(ExternalController.IDX_BUTTON_L1) +
+                ",R1=" + state.isPressed(ExternalController.IDX_BUTTON_R1) +
+                ",L2=" + state.isPressed(ExternalController.IDX_BUTTON_L2) +
+                ",R2=" + state.isPressed(ExternalController.IDX_BUTTON_R2) +
+                ",Start=" + state.isPressed(ExternalController.IDX_BUTTON_START) +
+                ",Select=" + state.isPressed(ExternalController.IDX_BUTTON_SELECT) +
+                "] sticks[LX=" + state.thumbLX +
+                ",LY=" + state.thumbLY +
+                ",RX=" + state.thumbRX +
+                ",RY=" + state.thumbRY +
+                "] triggers[L=" + state.triggerL +
+                ",R=" + state.triggerR +
+                "] dpad[U=" + state.dpad[0] +
+                ",R=" + state.dpad[1] +
+                ",D=" + state.dpad[2] +
+                ",L=" + state.dpad[3] + "]";
     }
 
     private void initializeAssignedControllers() {

@@ -12,14 +12,33 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <unistd.h>
-#include <SDL2/SDL.h>
 #include <stdarg.h>
 
-static int g_debug_enabled = 0;
+#include "SDL2/SDL.h"
 
-#define LOGI(...) dprintf(STDOUT_FILENO, __VA_ARGS__)
-#define LOGE(...) dprintf(STDERR_FILENO, __VA_ARGS__)
-#define LOGD(...) do { if (g_debug_enabled) dprintf(STDOUT_FILENO, __VA_ARGS__); } while (0)
+static int g_debug_enabled = 0;
+static int g_log_fd = -1;
+
+static void log_write(int fd, const char *fmt, ...)
+{
+    char buffer[512];
+    va_list ap;
+    va_start(ap, fmt);
+    int len = vsnprintf(buffer, sizeof(buffer), fmt, ap);
+    va_end(ap);
+
+    if (len <= 0) return;
+    if (len > (int)sizeof(buffer)) len = (int)sizeof(buffer);
+
+    dprintf(fd, "%.*s", len, buffer);
+    if (g_log_fd >= 0 && g_log_fd != fd) {
+        dprintf(g_log_fd, "%.*s", len, buffer);
+    }
+}
+
+#define LOGI(...) log_write(STDOUT_FILENO, __VA_ARGS__)
+#define LOGE(...) log_write(STDERR_FILENO, __VA_ARGS__)
+#define LOGD(...) do { if (g_debug_enabled) log_write(STDOUT_FILENO, __VA_ARGS__); } while (0)
 
 #define MAX_GAMEPADS 4
 static int vjoy_ids[MAX_GAMEPADS] = {-1};
@@ -110,7 +129,7 @@ static void *vjoy_updater(void *arg)
     for (;;) {
         pthread_mutex_lock(&shm_mutex);
 
-        ssize_t n = read(fd, &cur, sizeof cur);
+        ssize_t n = pread(fd, &cur, sizeof cur, 0);
 
         if (n == sizeof cur && memcmp(&cur, &last_state, sizeof cur) != 0) {
 
@@ -127,6 +146,10 @@ static void *vjoy_updater(void *arg)
             p_SDL_JoystickSetVirtualHat(js, 0, cur.hat);
 
             last_state = cur;
+            LOGD("P%d state lx=%d ly=%d rx=%d ry=%d lt=%d rt=%d hat=%u a=%u b=%u x=%u y=%u\n",
+                 idx,
+                 cur.lx, cur.ly, cur.rx, cur.ry, cur.lt, cur.rt, cur.hat,
+                 cur.btn[0], cur.btn[1], cur.btn[2], cur.btn[3]);
         }
         else if (n < 0) {
             LOGE("P%d: read error: %s\n", idx, strerror(errno));
@@ -140,11 +163,36 @@ static void *vjoy_updater(void *arg)
     return NULL;
 }
 
+static void build_gamepad_path(char *path, size_t path_size, int idx)
+{
+    const char *tmpdir = getenv("TMPDIR");
+    if (!tmpdir || !tmpdir[0]) {
+        tmpdir = "/tmp";
+    }
+
+    snprintf(path, path_size, "%s/gamepad%s.mem",
+             tmpdir,
+             (idx == 0) ? "" : (char[2]){'0' + idx, '\0'});
+}
+
+static void initialize_log_file(void)
+{
+    char log_path[256];
+    const char *tmpdir = getenv("TMPDIR");
+    if (!tmpdir || !tmpdir[0]) {
+        tmpdir = "/tmp";
+    }
+
+    snprintf(log_path, sizeof(log_path), "%s/evshim.log", tmpdir);
+    g_log_fd = open(log_path, O_CREAT | O_WRONLY | O_APPEND, 0644);
+}
+
 __attribute__((constructor))
 static void initialize_all_pads(void)
 {
     const char *dbg = getenv("EVSHIM_DEBUG");
     g_debug_enabled = dbg && strchr("1yY", *dbg);
+    initialize_log_file();
 
     LOGI("EVSHIM initializing…\n");
 
@@ -170,9 +218,7 @@ static void initialize_all_pads(void)
     for (int i = 0; i < players; ++i) {
 
         char path[256];
-        snprintf(path, sizeof path,
-                 "/data/data/app.gamenative/files/imagefs/tmp/gamepad%s.mem",
-                 (i == 0) ? "" : (char[2]){'0' + i, '\0'});
+        build_gamepad_path(path, sizeof path, i);
 
         /* open once – store for reader + writer */
         read_fd  [i] = open(path, O_RDONLY);
