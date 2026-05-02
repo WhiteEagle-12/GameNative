@@ -55,8 +55,8 @@ android {
         minSdk = 26
         targetSdk = 28
 
-        versionCode = 10014
-        versionName = "0.9.0-rollback"
+        versionCode = 10015
+        versionName = "0.9.1-redmagic"
 
         buildConfigField("boolean", "GOLD", "false")
         fun secret(name: String) =

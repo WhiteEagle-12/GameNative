@@ -6,6 +6,7 @@ import app.gamenative.data.GameSource
 import app.gamenative.enums.Marker
 import app.gamenative.service.SteamService
 import app.gamenative.service.amazon.AmazonService
+import app.gamenative.utils.LsfgVkManager
 import app.gamenative.service.epic.EpicService
 import app.gamenative.service.gog.GOGConstants
 import app.gamenative.service.gog.GOGService
@@ -317,6 +318,8 @@ object ContainerUtils {
             sharpnessEffect = container.getExtra("sharpnessEffect", "None"),
             sharpnessLevel = container.getExtra("sharpnessLevel", "100").toIntOrNull() ?: 100,
             sharpnessDenoise = container.getExtra("sharpnessDenoise", "100").toIntOrNull() ?: 100,
+            // LSFG Vulkan frame generation
+            lsfgEnabled = container.getExtra(LsfgVkManager.EXTRA_ARMED, "false").toBoolean(),
         )
     }
 
@@ -483,6 +486,8 @@ object ContainerUtils {
         container.putExtra("sharpnessEffect", containerData.sharpnessEffect)
         container.putExtra("sharpnessLevel", containerData.sharpnessLevel.toString())
         container.putExtra("sharpnessDenoise", containerData.sharpnessDenoise.toString())
+        // LSFG Vulkan frame generation
+        container.putExtra(LsfgVkManager.EXTRA_ARMED, containerData.lsfgEnabled.toString())
         try {
             container.language = containerData.language
         } catch (e: Exception) {
@@ -1264,12 +1269,38 @@ object ContainerUtils {
      * Checks if an executable is likely a system/utility file
      */
     private fun isSystemExecutable(fileName: String): Boolean {
-        val systemKeywords = listOf(
-            "unins", "setup", "install", "config", "crash", "handler",
-            "viewer", "compiler", "tool", "redist", "vcredist", "directx",
-            "steam", "origin", "uplay", "epic", "battlenet",
+        val baseName = fileName.removeSuffix(".exe")
+        val strongPrefixes = listOf(
+            "unins",
+            "uninstall",
+            "setup",
+            "install",
+            "redist",
+            "vcredist",
+            "vc_redist",
+            "dxsetup",
+            "directx",
+            "crashhandler",
+            "crashreporter",
         )
 
-        return systemKeywords.any { fileName.contains(it) }
+        if (strongPrefixes.any { baseName.startsWith(it) }) {
+            return true
+        }
+
+        val denylistTokens = setOf(
+            "unins",
+            "uninstall",
+            "setup",
+            "installer",
+            "redist",
+            "vcredist",
+            "directx",
+            "dxsetup",
+            "crashhandler",
+            "crashreporter",
+        )
+        val tokens = baseName.split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }
+        return tokens.any { it in denylistTokens }
     }
 }

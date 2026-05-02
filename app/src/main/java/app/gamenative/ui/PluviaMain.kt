@@ -106,6 +106,7 @@ import com.winlator.container.ContainerData
 import com.winlator.container.ContainerManager
 import com.winlator.core.StringUtils
 import com.winlator.core.TarCompressorUtils
+import com.winlator.xenvironment.ImageFSLegacyMigrator
 import com.winlator.xenvironment.ImageFs
 import com.winlator.xenvironment.ImageFsInstaller
 import `in`.dragonbra.javasteam.protobufs.steamclient.SteammessagesClientObjects.ECloudPendingRemoteOperation
@@ -1550,6 +1551,31 @@ fun preLaunchApp(
         val gameSource = ContainerUtils.extractGameSourceFromContainerId(appId)
         val isLocalSavesOnly = ContainerUtils.isLocalSavesOnly(context, appId)
 
+        // Migrate legacy on-disk imagefs layout (e.g. legacy Proton → shared paths) before manifest
+        // installs or launch deps — resolveMissingManifestInstallRequests can install Proton too.
+        val legacyImageFsRoot = File(context.filesDir, "imagefs")
+        val migrationOk = ImageFSLegacyMigrator.migrateLegacyDirsIfNeeded(
+            context,
+            legacyImageFsRoot,
+            container.wineVersion,
+        )
+        if (!migrationOk) {
+            Timber.tag("preLaunchApp").e(
+                "Legacy ImageFS migration failed: ${legacyImageFsRoot.absolutePath}",
+            )
+            setLoadingDialogVisible(false)
+            setMessageDialogState(
+                MessageDialogState(
+                    visible = true,
+                    type = DialogType.SYNC_FAIL,
+                    title = context.getString(R.string.install_failed_title),
+                    message = context.getString(R.string.install_failed_message),
+                    dismissBtnText = context.getString(R.string.ok),
+                ),
+            )
+            return@launch
+        }
+
         // When "Open container" is used we boot to desktop/file manager only — skip executable check
         if (!bootToContainer) {
             // Verify we have a launch executable for all platforms before proceeding (fail fast, avoid black screen)
@@ -1841,7 +1867,7 @@ fun preLaunchApp(
 
         // For Steam games, sync save files and check no pending remote operations are running
         val prefixToPath: (String) -> String = { prefix ->
-            PathType.from(prefix).toAbsPath(context, gameId, SteamService.userSteamId!!.accountID)
+            PathType.from(prefix).toAbsPath(container, gameId, SteamService.userSteamId!!.accountID)
         }
 
         // Workshop mod sync: check for updates and download if needed
